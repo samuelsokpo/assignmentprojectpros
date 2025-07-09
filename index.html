@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@assignmentprojectpro - Interactive Content Calendar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals (Tailwind Stone & Slate) -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard. The core is a clickable 30-day calendar grid, replacing the static table for intuitive navigation. A persistent side panel displays a strategic overview, including theme filters and a Chart.js donut chart showing content distribution. Clicking a day opens a detailed modal view with full copy and interactive elements. This structure was chosen because it transforms a linear report into a multi-dimensional analysis tool, allowing users to explore chronologically, thematically, and in detail, which vastly improves usability and strategic insight over a simple table. -->
+    <!-- Visualization & Content Choices: 
+    - Report Info: 30-day content plan for @assignmentprojectpro. Goal: To make the content strategy explorable and understandable.
+    - Viz/Presentation 1: Interactive Calendar Grid (HTML/Tailwind/JS). Interaction: Click to view details, hover for topic. Justification: Most intuitive way to visualize a monthly plan.
+    - Viz/Presentation 2: Thematic Donut Chart (Chart.js/Canvas). Interaction: Hover for details, legend toggles. Justification: Provides a high-level, data-driven summary of the content balance.
+    - Viz/Presentation 3: Detail Modal (HTML/Tailwind/JS). Interaction: View full slide-by-slide copy, copy hashtags. Justification: Focuses user attention on a single day's content without losing context.
+    - Library/Method: Vanilla JS for all logic and DOM manipulation, Chart.js for the chart. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .calendar-day {
+            min-height: 100px;
+        }
+        .calendar-day.highlight {
+            background-color: #e2e8f0; /* slate-200 */
+            border-color: #64748b; /* slate-500 */
+        }
+        .modal-slide {
+            border-left: 3px solid #64748b; /* slate-500 */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 320px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 280px;
+                max-height: 280px;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div id="app" class="p-4 md:p-8 max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900">Content Strategy Dashboard</h1>
+            <p class="text-lg text-slate-600 mt-2">An interactive 30-day content plan for <span class="font-semibold text-slate-800">@assignmentprojectpro</span>.</p>
+        </header>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Left Panel: Controls & Analysis -->
+            <aside class="lg:w-1/3 xl:w-1/4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 self-start">
+                <h2 class="text-xl font-bold mb-4">Content Analysis</h2>
+                <p class="text-slate-600 mb-6 text-sm">This section provides a high-level overview of the content strategy, breaking down the 30-day plan by its core themes. Use the filters to highlight specific post types on the calendar.</p>
+                
+                <h3 class="font-semibold mb-3">Filter by Theme</h3>
+                <div id="theme-filters" class="flex flex-wrap gap-2 mb-8">
+                    <button data-theme="all" class="theme-filter-btn bg-slate-800 text-white px-3 py-1 rounded-full text-sm font-medium">All</button>
+                    <button data-theme="Pain Points" class="theme-filter-btn bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1 rounded-full text-sm font-medium">Pain Points</button>
+                    <button data-theme="Expertise" class="theme-filter-btn bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1 rounded-full text-sm font-medium">Expertise</button>
+                    <button data-theme="Benefits" class="theme-filter-btn bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1 rounded-full text-sm font-medium">Benefits</button>
+                    <button data-theme="Trust & Process" class="theme-filter-btn bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1 rounded-full text-sm font-medium">Trust & Process</button>
+                </div>
+
+                <h3 class="font-semibold mb-3">Thematic Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="themeChart"></canvas>
+                </div>
+            </aside>
+
+            <!-- Right Panel: Calendar -->
+            <main class="lg:w-2/3 xl:w-3/4">
+                 <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="grid grid-cols-7 gap-1 text-center font-semibold text-sm text-slate-500 mb-2">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                    <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="detail-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center p-4 z-50 transition-opacity duration-300">
+        <div id="modal-content" class="bg-white w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col transform scale-95 transition-transform duration-300">
+            <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h2 id="modal-title" class="text-2xl font-bold text-slate-900"></h2>
+                    <p id="modal-topic" class="text-slate-600"></p>
+                </div>
+                <button id="close-modal-btn" class="text-slate-500 hover:text-slate-800">&times;</button>
+            </div>
+            <div id="modal-body" class="p-6 overflow-y-auto">
+                <h3 class="font-semibold mb-3 text-lg">Carousel Slides</h3>
+                <div id="modal-copy" class="space-y-4"></div>
+
+                <h3 class="font-semibold my-4 text-lg">Hashtags</h3>
+                <div class="flex items-center gap-4">
+                     <p id="modal-hashtags" class="text-sm text-slate-600 bg-slate-100 p-3 rounded-lg flex-grow"></p>
+                     <button id="copy-hashtags-btn" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors">Copy</button>
+                </div>
+            </div>
+             <div id="copy-feedback" class="text-center pb-4 text-sm font-medium text-emerald-600 opacity-0 transition-opacity">Copied to clipboard!</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const contentData = [
+                { day: 1, hook: "The Thesis Terror: Solved.", topic: "Myth vs. Reality: Thesis Writing", copy: "Slide 1: \"The Thesis Terror: Solved.\"<br>Slide 2: Myth: \"You need to be a genius to write a groundbreaking thesis.\"<br>Slide 3: Reality: \"You need a strategic approach, meticulous research, and expert guidance. (That's where we come in!)\"<br>Slide 4: \"A groundbreaking thesis isn't about innate genius, it's about structured brilliance. We provide the structure, you provide the vision.\"<br>Slide 5: \"From daunting draft to distinction-worthy document. Your academic journey, simplified.\"", hashtags: "#AcademicWriting #ThesisHelp #Dissertation #ResearchPaper #StudentLife #University #AcademicExcellence #StudyTips #AssignmentProjectPro", theme: "Pain Points" },
+                { day: 2, hook: "Your Grades. Our Secret Weapon.", topic: "The \"Unfair Advantage\" of Professional Academic Support", copy: "Slide 1: \"Your Grades. Our Secret Weapon.\"<br>Slide 2: \"Feeling overwhelmed by deadlines and complex assignments?\"<br>Slide 3: \"Imagine a world where every submission is polished, precise, and perfect.\"<br>Slide 4: \"We're not just 'help,' we're your strategic partner, giving you the edge you need to excel. It's your secret weapon for academic success.\"<br>Slide 5: \"Unlock higher grades, more free time, and unparalleled confidence. Ready to level up?\"", hashtags: "#AcademicSuccess #GradeBooster #CollegeLife #StudentSupport #AcademicHelp #AssignmentProjectPro #StudySmart #TimeManagement", theme: "Benefits" },
+                { day: 3, hook: "Beyond Plagiarism: The TRUTH.", topic: "Unmasking Plagiarism: What You DON'T Know", copy: "Slide 1: \"Beyond Plagiarism: The TRUTH.\"<br>Slide 2: \"Did you know unintentional plagiarism is a real threat?\"<br>Slide 3: \"It's not just copy-pasting. Improper citation, paraphrasing errors, and even self-plagiarism can cost you.\"<br>Slide 4: \"Our experts are masters of originality and ethical academic practice. We ensure your work is 100% unique and perfectly cited, every time.\"<br>Slide 5: \"Protect your academic integrity. Choose expertise, choose peace of mind.\"", hashtags: "#PlagiarismFree #AcademicIntegrity #CitationTips #ResearchSkills #EthicalWriting #AssignmentProjectPro #StudentTips #UniversityLife", theme: "Expertise" },
+                { day: 4, hook: "The Clock is Ticking. Are You?", topic: "Deadline Domination: How to Beat the Clock", copy: "Slide 1: \"The Clock is Ticking. Are You?\"<br>Slide 2: \"Deadlines looming? Panic setting in? You're not alone.\"<br>Slide 3: \"We don't just meet deadlines; we conquer them. Precision, speed, and uncompromising quality.\"<br>Slide 4: \"Stop sacrificing sleep. Start submitting with confidence. Your time is precious, let us handle the pressure.\"<br>Slide 5: \"Reclaim your evenings. Reclaim your sanity. Let's make those deadlines disappear.\"", hashtags: "#DeadlineStress #TimeManagement #StudentHacks #AcademicSupport #AssignmentHelp #AssignmentProjectPro #ProductivityTips #StressRelief", theme: "Pain Points" },
+                { day: 5, hook: "Your Research. Our Obsession.", topic: "The Anatomy of a Flawless Research Paper", copy: "Slide 1: \"Your Research. Our Obsession.\"<br>Slide 2: \"It's not just about finding sources, it's about crafting a compelling narrative.\"<br>Slide 3: \"From literature review to methodology, analysis to conclusion – every section perfected.\"<br>Slide 4: \"We dive deep into your topic, ensuring every argument is backed by robust, credible research. Your paper, elevated.\"<br>Slide 5: \"Transform raw data into brilliant insights. Experience research excellence.\"", hashtags: "#ResearchPaper #AcademicResearch #LiteratureReview #Methodology #ThesisWriting #AssignmentProjectPro #AcademicExcellence #StudySkills", theme: "Expertise" },
+                { day: 6, hook: "Project Paralysis? Not Anymore.", topic: "Breaking Down Complex Projects: The Pro Way", copy: "Slide 1: \"Project Paralysis? Not Anymore.\"<br>Slide 2: \"That massive project feels impossible to start, right?\"<br>Slide 3: \"We dissect, strategize, and execute. Turning overwhelming tasks into manageable milestones.\"<br>Slide 4: \"Whether it's a capstone project or a group assignment, we provide the clarity and structure you need to succeed.\"<br>Slide 5: \"Don't just complete it, ace it. Your project, our expertise.\"", hashtags: "#ProjectHelp #CapstoneProject #GroupWork #AcademicProjects #StudentSolutions #AssignmentProjectPro #ProblemSolving #AcademicSupport", theme: "Pain Points" },
+                { day: 7, hook: "The Dissertation Dilemma: Decoded.", topic: "Cracking the Dissertation Code: A Step-by-Step Guide", copy: "Slide 1: \"The Dissertation Dilemma: Decoded.\"<br>Slide 2: \"The dissertation: the Everest of academic writing. Many attempt, few truly conquer.\"<br>Slide 3: \"We break down every stage: proposal, literature, methodology, results, discussion, conclusion. Simplified.\"<br>Slide 4: \"Our experts guide you through the labyrinth, ensuring coherence, originality, and academic rigor at every turn.\"<br>Slide 5: \"Your magnum opus, perfected. Conquer your dissertation with confidence.\"", hashtags: "#Dissertation #PhDLife #MastersDegree #AcademicJourney #ThesisSupport #AssignmentProjectPro #HigherEducation #ResearchSkills", theme: "Expertise" },
+                { day: 8, hook: "Beyond the Grade: What You GAIN.", topic: "The Hidden Benefits of Professional Academic Writing", copy: "Slide 1: \"Beyond the Grade: What You GAIN.\"<br>Slide 2: \"It's not just about a good grade. It's about skill development, time freedom, and peace of mind.\"<br>Slide 3: \"Gain critical thinking skills, improve your research acumen, and master academic conventions.\"<br>Slide 4: \"While we handle the heavy lifting, you gain invaluable time to focus on what truly matters: learning, growth, and life!\"<br>Slide 5: \"Invest in your future. Invest in academic excellence.\"", hashtags: "#StudentSuccess #PersonalGrowth #TimeFreedom #AcademicSkills #FutureReady #AssignmentProjectPro #StudyLife #Wellbeing", theme: "Benefits" },
+                { day: 9, hook: "The Art of the A: Revealed.", topic: "What Professors REALLY Look For in Your Papers", copy: "Slide 1: \"The Art of the A: Revealed.\"<br>Slide 2: \"Think you know what gets an 'A'? It's more than just correct answers.\"<br>Slide 3: \"Originality, critical analysis, clear argumentation, impeccable structure, and flawless presentation.\"<br>Slide 4: \"Our writers are former academics and top-tier professionals who know the grading rubrics inside out. We write to impress.\"<br>Slide 5: \"Stop guessing, start excelling. Uncover the secrets to top grades.\"", hashtags: "#GradeHacks #AcademicTips #ProfessorsPerspective #EssayTips #AssignmentProjectPro #StudentLife #StudySmart #WritingSkills", theme: "Expertise" },
+                { day: 10, hook: "Writer's Block? We're the Cure.", topic: "Overcoming Writer's Block: The @assignmentprojectpro Method", copy: "Slide 1: \"Writer's Block? We're the Cure.\"<br>Slide 2: \"Staring at a blank page? Ideas stuck? We've all been there.\"<br>Slide 3: \"Our process kickstarts your project with clear outlines, compelling arguments, and fresh perspectives.\"<br>Slide 4: \"We transform your fragmented thoughts into coherent, well-structured masterpieces. Say goodbye to the blank page nightmare.\"<br>Slide 5: \"Unleash your potential. Let your ideas flow, effortlessly.\"", hashtags: "#WritersBlock #AcademicHelp #EssayWriting #ResearchPaper #StudentStruggles #AssignmentProjectPro #Creativity #ProblemSolved", theme: "Pain Points" },
+                { day: 11, hook: "The 24/7 Academic Lifeline.", topic: "Always There: Our Unwavering Support System", copy: "Slide 1: \"The 24/7 Academic Lifeline.\"<br>Slide 2: \"Academic emergencies don't stick to office hours. Neither do we.\"<br>Slide 3: \"Our dedicated support team is available around the clock to answer your questions and provide updates.\"<br>Slide 4: \"From urgent revisions to last-minute queries, we're your reliable partner, day or night.\"<br>Slide 5: \"Never feel alone in your academic journey. We've got your back.\"", hashtags: "#StudentSupport #CustomerService #AcademicHelp #AlwaysAvailable #AssignmentProjectPro #PeaceOfMind #ReliableService #StudentLife", theme: "Trust & Process" },
+                { day: 12, hook: "From Zero to Hero: Your Story.", topic: "Transforming Academic Struggles into Success Stories", copy: "Slide 1: \"From Zero to Hero: Your Story.\"<br>Slide 2: \"Meet [Anonymized Student Name]: Struggled with [specific problem, e.g., complex research].\"<br>Slide 3: \"How we helped: Provided [specific service, e.g., comprehensive literature review and data analysis].\"<br>Slide 4: \"The result: [Achieved specific outcome, e.g., 'A' grade and newfound confidence in academic writing].\"<br>Slide 5: \"Your success story starts here. Let us help you write your next chapter.\"", hashtags: "#SuccessStory #StudentTransformation #AcademicAchievements #CaseStudy #AssignmentProjectPro #Inspiration #StudentJourney #RealResults", theme: "Trust & Process" },
+                { day: 13, hook: "The Citation Conundrum: CRACKED.", topic: "Mastering Citation Styles: APA, MLA, Chicago & Beyond", copy: "Slide 1: \"The Citation Conundrum: CRACKED.\"<br>Slide 2: \"APA, MLA, Chicago, Harvard... The endless citation maze.\"<br>Slide 3: \"One misplaced comma, one missing bracket – instant grade deduction. Don't let it happen.\"<br>Slide 4: \"Our experts are fluent in every major citation style, ensuring flawless referencing and bibliography for your work.\"<br>Slide 5: \"Submit with confidence, knowing every source is perfectly attributed. No more citation stress.\"", hashtags: "#CitationStyles #APA #MLA #ChicagoStyle #HarvardReferencing #AcademicWriting #AssignmentProjectPro #ResearchSkills #StudentTips", theme: "Expertise" },
+                { day: 14, hook: "The Future is Bright. Your Grades Should Be Too.", topic: "How Academic Excellence Fuels Your Career", copy: "Slide 1: \"The Future is Bright. Your Grades Should Be Too.\"<br>Slide 2: \"Think academic writing is just for grades? Think bigger.\"<br>Slide 3: \"Strong research, critical thinking, and clear communication are highly valued skills in *any* career.\"<br>Slide 4: \"We don't just help you pass; we help you build a foundation for future professional success. Your academic record matters.\"<br>Slide 5: \"Invest in your present, secure your future. Academic excellence, career ready.\"", hashtags: "#CareerGoals #FutureSuccess #ProfessionalDevelopment #AcademicSkills #StudentMotivation #AssignmentProjectPro #InvestInYourself #HigherEd", theme: "Benefits" },
+                { day: 15, hook: "The 5-Minute Grade Booster.", topic: "Quick Hacks to Instantly Improve Your Academic Writing", copy: "Slide 1: \"The 5-Minute Grade Booster.\"<br>Slide 2: \"Want to instantly improve your paper? Try these quick tips!\"<br>Slide 3: \"Tip 1: Strong Thesis Statement. Make it clear, concise, and arguable.\"<br>Slide 4: \"Tip 2: Topic Sentences. Each paragraph needs one, clearly stating its main idea.\"<br>Slide 5: \"Tip 3: Proofread Aloud. Catches more errors than silent reading.\"<br>Slide 6: \"Tip 4: Vary Sentence Structure. Keeps your writing engaging.\"<br>Slide 7: \"Tip 5: Use Active Voice. Makes your writing stronger and clearer.\"<br>Slide 8: \"Want more than quick hacks? We offer comprehensive solutions for lasting academic success!\"", hashtags: "#WritingTips #StudyHacks #GradeBoost #AcademicTips #StudentLife #AssignmentProjectPro #QuickTips #Proofreading", theme: "Benefits" },
+                { day: 16, hook: "Your Brain on Overload? Chill.", topic: "Reclaim Your Time: The @assignmentprojectpro Promise", copy: "Slide 1: \"Your Brain on Overload? Chill.\"<br>Slide 2: \"Juggling classes, work, social life, AND complex assignments?\"<br>Slide 3: \"Something has to give. Don't let it be your sanity or your grades.\"<br>Slide 4: \"We take the academic burden off your shoulders, freeing up precious hours for rest, hobbies, or other commitments.\"<br>Slide 5: \"More time, less stress, better grades. It's not a dream, it's our promise.\"", hashtags: "#TimeFreedom #StressLess #StudentWellbeing #WorkLifeBalance #AcademicSupport #AssignmentProjectPro #SelfCare #StudentLife", theme: "Pain Points" },
+                { day: 17, hook: "The Editor's Edge: Unseen Power.", topic: "Why Professional Editing is Your Secret Weapon", copy: "Slide 1: \"The Editor's Edge: Unseen Power.\"<br>Slide 2: \"You've written it. Now, let's make it shine. Editing isn't just about typos.\"<br>Slide 3: \"It's about clarity, coherence, flow, argumentation, and academic tone. The difference between good and exceptional.\"<br>Slide 4: \"Our expert editors meticulously refine every sentence, ensuring your ideas are presented with maximum impact and zero errors.\"<br>Slide 5: \"Don't just submit, impress. Elevate your writing to perfection.\"", hashtags: "#EditingServices #Proofreading #AcademicEditing #WritingPerfection #GradeImprovement #AssignmentProjectPro #WritingSkills #StudentTips", theme: "Expertise" },
+                { day: 18, hook: "The Research Rabbit Hole: Escape.", topic: "Navigating Research: Avoid Common Pitfalls", copy: "Slide 1: \"The Research Rabbit Hole: Escape.\"<br>Slide 2: \"Lost in a sea of articles? Struggling to find credible sources?\"<br>Slide 3: \"Common pitfalls: irrelevant sources, lack of critical evaluation, poor organization of findings.\"<br>Slide 4: \"Our research specialists are masters at identifying, synthesizing, and integrating relevant, high-quality information for your papers.\"<br>Slide 5: \"Efficient research, impactful results. Stop digging, start discovering.\"", hashtags: "#ResearchSkills #AcademicResearch #SourceEvaluation #InformationLiteracy #StudentHacks #AssignmentProjectPro #StudySmart #ResearchTips", theme: "Expertise" },
+                { day: 19, hook: "The 'A' Grade Blueprint: Revealed.", topic: "Our Proven Process for Academic Excellence", copy: "Slide 1: \"The 'A' Grade Blueprint: Revealed.\"<br>Slide 2: \"Step 1: Deep Dive Consultation. Understanding your exact needs and requirements.\"<br>Slide 3: \"Step 2: Expert Assignment. Matching your project with the perfect subject matter expert.\"<br>Slide 4: \"Step 3: Meticulous Research & Drafting. Crafting original, well-supported content.\"<br>Slide 5: \"Step 4: Rigorous Editing & Quality Assurance. Ensuring perfection and plagiarism-free delivery.\"<br>Slide 6: \"Step 5: Timely Delivery & Support. Your success, our priority.\"", hashtags: "#OurProcess #QualityAssurance #AcademicExcellence #TransparentService #AssignmentProjectPro #StudentSuccess #HowWeWork #Reliable", theme: "Trust & Process" },
+                { day: 20, hook: "Beyond Essays: We Do IT ALL.", topic: "Comprehensive Academic Solutions for Every Need", copy: "Slide 1: \"Beyond Essays: We Do IT ALL.\"<br>Slide 2: \"Think we only do essays? Think again!\"<br>Slide 3: \"From research proposals to literature reviews, case studies to lab reports, presentations to statistical analyses.\"<br>Slide 4: \"Whatever your academic challenge, we have the specialized expertise to deliver exceptional results.\"<br>Slide 5: \"Your one-stop shop for ALL academic writing needs. Challenge us!\"", hashtags: "#AcademicSolutions #AllSubjects #SpecializedHelp #UniversitySupport #AssignmentProjectPro #ComprehensiveService #StudentLife #CustomWriting", theme: "Expertise" },
+                { day: 21, hook: "The Professor's Pet Peeves: Avoid Them.", topic: "Common Academic Writing Mistakes to AVOID", copy: "Slide 1: \"The Professor's Pet Peeves: Avoid Them.\"<br>Slide 2: \"Mistake 1: Vague Thesis Statements. Be precise!\"<br>Slide 3: \"Mistake 2: Lack of Evidence. Support every claim with credible sources.\"<br>Slide 4: \"Mistake 3: Poor Organization. Logical flow is key.\"<br>Slide 5: \"Mistake 4: Grammatical Errors & Typos. Proofread, proofread, proofread!\"<br>Slide 6: \"Mistake 5: Plagiarism. Even unintentional can be costly. Cite everything!\"<br>Slide 7: \"We eliminate these pitfalls, ensuring your paper is polished and professional.\"", hashtags: "#WritingMistakes #AcademicTips #ProfessorTips #AvoidErrors #StudentHacks #AssignmentProjectPro #GrammarTips #Proofreading", theme: "Expertise" },
+                { day: 22, hook: "Your Voice. Amplified.", topic: "How We Help You Articulate Complex Ideas Clearly", copy: "Slide 1: \"Your Voice. Amplified.\"<br>Slide 2: \"You have brilliant ideas. But are they coming across clearly on paper?\"<br>Slide 3: \"We help you structure your arguments, refine your language, and ensure your unique perspective shines through.\"<br>Slide 4: \"It's not about writing *for* you, it's about empowering *your* voice with academic precision and clarity.\"<br>Slide 5: \"Make your ideas resonate. Command attention with powerful academic writing.\"", hashtags: "#ClearCommunication #AcademicVoice #WritingClarity #Argumentation #StudentEmpowerment #AssignmentProjectPro #ThoughtLeadership #AcademicSkills", theme: "Benefits" },
+                { day: 23, hook: "The Time-Saving Equation: Solved.", topic: "Calculate Your Time Savings with @assignmentprojectpro", copy: "Slide 1: \"The Time-Saving Equation: Solved.\"<br>Slide 2: \"Average research paper: 40+ hours. Average thesis: 200+ hours.\"<br>Slide 3: \"Time spent struggling = Time lost from learning, living, and thriving.\"<br>Slide 4: \"With us, those hours are freed up. Imagine what you could do with that time!\"<br>Slide 5: \"Invest a little, gain a lot. Your time, your terms.\"", hashtags: "#TimeSaver #StudentLife #Productivity #AcademicEfficiency #LifeHacks #AssignmentProjectPro #WorkLifeBalance #SmartChoices", theme: "Benefits" },
+                { day: 24, hook: "Confidentiality: Our Sacred Vow.", topic: "Your Privacy, Our Priority: Uncompromising Confidentiality", copy: "Slide 1: \"Confidentiality: Our Sacred Vow.\"<br>Slide 2: \"Worried about privacy? We understand. Your trust is paramount.\"<br>Slide 3: \"All communications, project details, and personal information are treated with the strictest confidentiality.\"<br>Slide 4: \"Your identity and academic integrity are fully protected. We operate with discretion and professionalism.\"<br>Slide 5: \"Peace of mind, guaranteed. Your academic journey, secured.\"", hashtags: "#Confidentiality #PrivacyMatters #TrustworthyService #SecurePlatform #StudentPrivacy #AssignmentProjectPro #EthicalPractice #Reliable", theme: "Trust & Process" },
+                { day: 25, hook: "The 'Why' Behind the 'What'.", topic: "Understanding the Purpose of Academic Assignments", copy: "Slide 1: \"The 'Why' Behind the 'What'.\"<br>Slide 2: \"Ever wonder *why* you have to write that 5000-word essay?\"<br>Slide 3: \"It's not just busy work. It's about developing critical thinking, research, analysis, and communication skills.\"<br>Slide 4: \"We help you grasp the underlying objectives of each assignment, ensuring your work aligns perfectly with academic expectations.\"<br>Slide 5: \"Beyond the task, master the skill. Understand the purpose, ace the paper.\"", hashtags: "#AcademicPurpose #LearningGoals #CriticalThinking #StudentInsight #AssignmentProjectPro #StudySkills #HigherEducation #BeyondGrades", theme: "Benefits" },
+                { day: 26, hook: "Your Feedback. Our Fuel.", topic: "Continuous Improvement: We Listen, We Evolve", copy: "Slide 1: \"Your Feedback. Our Fuel.\"<br>Slide 2: \"We don't just deliver; we refine. Your satisfaction drives our excellence.\"<br>Slide 3: \"We actively seek and value your feedback to continuously improve our services and ensure unparalleled quality.\"<br>Slide 4: \"From initial consultation to final delivery, your input shapes our process. We're here to serve *you* better.\"<br>Slide 5: \"A partnership built on trust and continuous improvement. Experience the difference.\"", hashtags: "#CustomerSatisfaction #FeedbackMatters #ContinuousImprovement #QualityService #AssignmentProjectPro #ClientFirst #ExcellenceDriven #StudentCentric", theme: "Trust & Process" },
+                { day: 27, hook: "The Global Academic Edge.", topic: "Serving Students Worldwide: Our International Reach", copy: "Slide 1: \"The Global Academic Edge.\"<br>Slide 2: \"No matter where you are in the world, academic excellence is within reach.\"<br>Slide 3: \"We cater to diverse academic systems and requirements, assisting students from various countries and universities.\"<br>Slide 4: \"Our global team of experts understands the nuances of international academic standards. Your success, globally recognized.\"<br>Slide 5: \"Your passport to academic distinction. Connecting students to success, worldwide.\"", hashtags: "#GlobalStudents #InternationalEducation #AcademicSupport #WorldwideService #AssignmentProjectPro #StudyAbroad #UniversityLife #GlobalReach", theme: "Trust & Process" },
+                { day: 28, hook: "The Price of Peace of Mind: Priceless.", topic: "Understanding the Value of Professional Academic Support", copy: "Slide 1: \"The Price of Peace of Mind: Priceless.\"<br>Slide 2: \"Is professional help 'worth it'? Consider the cost of stress, lost time, and mediocre grades.\"<br>Slide 3: \"Investing in expert academic support is investing in your mental health, your time, and your future success.\"<br>Slide 4: \"It's not just a service; it's an investment that pays dividends in confidence, grades, and a brighter academic outlook.\"<br>Slide 5: \"Prioritize your well-being. Prioritize your success. The value is undeniable.\"", hashtags: "#ValueForMoney #InvestmentInSelf #PeaceOfMind #StudentWellbeing #AcademicGoals #AssignmentProjectPro #SmartInvestment #StressFree", theme: "Benefits" },
+                { day: 29, hook: "Your Questions. Our Answers.", topic: "FAQs: Everything You Need to Know About @assignmentprojectpro", copy: "Slide 1: \"Your Questions. Our Answers.\"<br>Slide 2: \"Q: Is it confidential? A: Absolutely, your privacy is our top priority.\"<br>Slide 3: \"Q: How do I get started? A: Visit our link in bio for a free consultation!\"<br>Slide 4: \"Q: What subjects do you cover? A: All major disciplines and niche areas. Just ask!\"<br>Slide 5: \"Q: What if I need revisions? A: We offer free revisions to ensure your complete satisfaction.\"<br>Slide 6: \"Have more questions? DM us or visit our website! We're here to help.\"", hashtags: "#FAQs #StudentQuestions #GetStarted #AcademicHelp #AssignmentProjectPro #CustomerSupport #Transparency #AskUsAnything", theme: "Trust & Process" },
+                { day: 30, hook: "Ready to Dominate Your Degree?", topic: "The Call to Action: Your Next Step to Academic Success", copy: "Slide 1: \"Ready to Dominate Your Degree?\"<br>Slide 2: \"You've seen how we transform academic challenges into triumphs.\"<br>Slide 3: \"Stop struggling, start excelling. Your academic potential is limitless.\"<br>Slide 4: \"Take the first step towards stress-free, high-achieving academic life.\"<br>Slide 5: \"Click the link in our bio to get a FREE consultation and unlock your academic best with @assignmentprojectpro!\"", hashtags: "#CallToAction #AcademicSuccess #GetStarted #StudentMotivation #LinkInBio #AssignmentProjectPro #AchieveYourGoals #FutureIsBright", theme: "Benefits" }
+            ];
+
+            const calendarGrid = document.getElementById('calendar-grid');
+            const themeFilters = document.getElementById('theme-filters');
+            const modal = document.getElementById('detail-modal');
+            const modalContent = document.getElementById('modal-content');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            
+            let currentFilter = 'all';
+
+            function renderCalendar() {
+                calendarGrid.innerHTML = '';
+                // The calendar starts on a Wednesday (Day 1)
+                const startDayOffset = 3; 
+                for (let i = 0; i < startDayOffset; i++) {
+                    calendarGrid.innerHTML += '<div></div>';
+                }
+
+                contentData.forEach(item => {
+                    const dayElement = document.createElement('div');
+                    dayElement.className = `calendar-day border border-slate-200 rounded-lg p-3 flex flex-col justify-between cursor-pointer hover:bg-slate-100 transition-colors ${item.day}`;
+                    dayElement.dataset.day = item.day;
+                    dayElement.innerHTML = `
+                        <span class="font-bold text-slate-700">${item.day}</span>
+                        <p class="text-xs text-slate-500 mt-2">${item.hook}</p>
+                    `;
+                    
+                    if (currentFilter !== 'all' && item.theme === currentFilter) {
+                        dayElement.classList.add('highlight');
+                    }
+
+                    dayElement.addEventListener('click', () => showDetails(item.day));
+                    calendarGrid.appendChild(dayElement);
+                });
+            }
+
+            function showDetails(day) {
+                const data = contentData.find(item => item.day === day);
+                if (!data) return;
+
+                document.getElementById('modal-title').textContent = data.hook;
+                document.getElementById('modal-topic').textContent = `Day ${data.day}: ${data.topic}`;
+                
+                const copyContainer = document.getElementById('modal-copy');
+                copyContainer.innerHTML = '';
+                const slides = data.copy.split('<br>');
+                slides.forEach(slide => {
+                    const slideElement = document.createElement('div');
+                    slideElement.className = 'modal-slide pl-4 py-2 bg-slate-50 rounded-r-lg';
+                    slideElement.innerHTML = `<p class="text-slate-700">${slide.replace(/Slide \d+: /i, '<span class="font-semibold text-slate-500">$&</span>')}</p>`;
+                    copyContainer.appendChild(slideElement);
+                });
+                
+                document.getElementById('modal-hashtags').textContent = data.hashtags;
+                
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => {
+                    modal.classList.add('opacity-100');
+                    modalContent.classList.remove('scale-95');
+                }, 10);
+            }
+
+            function hideDetails() {
+                modal.classList.remove('opacity-100');
+                modalContent.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    modal.classList.remove('flex');
+                }, 300);
+            }
+
+            function filterByTheme(theme) {
+                currentFilter = theme;
+                document.querySelectorAll('.theme-filter-btn').forEach(btn => {
+                    if (btn.dataset.theme === theme) {
+                        btn.classList.add('bg-slate-800', 'text-white');
+                        btn.classList.remove('bg-white', 'border', 'border-slate-300', 'hover:bg-slate-100');
+                    } else {
+                        btn.classList.remove('bg-slate-800', 'text-white');
+                        btn.classList.add('bg-white', 'border', 'border-slate-300', 'hover:bg-slate-100');
+                    }
+                });
+                
+                document.querySelectorAll('.calendar-day').forEach(dayEl => {
+                    dayEl.classList.remove('highlight');
+                    const dayData = contentData.find(d => d.day == dayEl.dataset.day);
+                    if (theme === 'all' || (dayData && dayData.theme === theme)) {
+                        if (theme !== 'all') {
+                           dayEl.classList.add('highlight');
+                        }
+                    }
+                });
+            }
+
+            function renderThemeChart() {
+                const themeCounts = contentData.reduce((acc, item) => {
+                    acc[item.theme] = (acc[item.theme] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const ctx = document.getElementById('themeChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(themeCounts),
+                        datasets: [{
+                            data: Object.values(themeCounts),
+                            backgroundColor: [
+                                '#fca5a5', // red-300 for Pain Points
+                                '#93c5fd', // blue-300 for Expertise
+                                '#86efac', // green-300 for Benefits
+                                '#c4b5fd', // violet-300 for Trust
+                            ],
+                            borderColor: '#f8fafc', // slate-50
+                            borderWidth: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    boxWidth: 12,
+                                    padding: 20,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            }
+                        },
+                        cutout: '65%'
+                    }
+                });
+            }
+
+            document.getElementById('copy-hashtags-btn').addEventListener('click', () => {
+                const hashtags = document.getElementById('modal-hashtags').textContent;
+                navigator.clipboard.writeText(hashtags).then(() => {
+                    const feedback = document.getElementById('copy-feedback');
+                    feedback.classList.add('opacity-100');
+                    setTimeout(() => feedback.classList.remove('opacity-100'), 2000);
+                });
+            });
+
+            themeFilters.addEventListener('click', (e) => {
+                if (e.target.classList.contains('theme-filter-btn')) {
+                    filterByTheme(e.target.dataset.theme);
+                }
+            });
+
+            closeModalBtn.addEventListener('click', hideDetails);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    hideDetails();
+                }
+            });
+
+            renderCalendar();
+            renderThemeChart();
+        });
+    </script>
+</body>
+</html>
